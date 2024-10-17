@@ -9,29 +9,30 @@ class AuthController {
       const authHeader = req.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith('Basic ')) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized: Missing or invalid authorization header' });
       }
 
-      // Decode Base64 credentials
       const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString();
       const [email, password] = credentials.split(':');
 
-      // Ensure both email and password are provided
       if (!email || !password) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized: Email and password are required' });
       }
 
-      // Hash the password
       const hashedPassword = sha1(password);
       const user = await dbClient.db.collection('users').findOne({ email, password: hashedPassword });
 
       if (!user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
       }
 
-      // Generate a token and store it in Redis
       const token = uuidv4();
-      await redisClient.set(`auth_${token}`, user._id.toString(), 86400);
+      try {
+        await redisClient.set(`auth_${token}`, user._id.toString(), 86400);
+      } catch (redisError) {
+        console.error('Redis error:', redisError);
+        return res.status(500).json({ error: 'Internal Server Error: Redis operation failed' });
+      }
 
       return res.status(200).json({ token });
     } catch (error) {
@@ -45,16 +46,21 @@ class AuthController {
       const token = req.headers['x-token'];
 
       if (!token) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized: Missing token' });
       }
 
-      const userId = await redisClient.get(`auth_${token}`);
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+      try {
+        const userId = await redisClient.get(`auth_${token}`);
+        if (!userId) {
+          return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+        }
 
-      await redisClient.del(`auth_${token}`);
-      return res.status(204).send();
+        await redisClient.del(`auth_${token}`);
+        return res.status(204).send();
+      } catch (redisError) {
+        console.error('Redis error during logout:', redisError);
+        return res.status(500).json({ error: 'Internal Server Error: Redis operation failed' });
+      }
     } catch (error) {
       console.error('Error during logout:', error);
       return res.status(500).json({ error: 'Internal Server Error' });

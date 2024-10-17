@@ -1,6 +1,6 @@
 import mongodb from 'mongodb';
 
-const { MongoClient } = mongodb;
+const { MongoClient, ObjectId } = mongodb;
 
 class DBClient {
   constructor() {
@@ -10,25 +10,47 @@ class DBClient {
     const url = `mongodb://${host}:${port}`;
 
     this.client = new MongoClient(url, { useUnifiedTopology: true });
+    this.db = null;
+
     this.client.connect()
       .then(() => {
+        console.log('MongoDB connected successfully');
         this.db = this.client.db(database);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error('MongoDB connection error:', err);
+      });
   }
 
-  isAlive() {
-    return this.client.isConnected();
+  async isAlive() {
+    try {
+      await this.client.db('admin').command({ ping: 1 });
+      return true;
+    } catch (error) {
+      console.error('MongoDB ping failed:', error);
+      return false;
+    }
   }
 
   async nbUsers() {
-    return this.db.collection('users').countDocuments();
+    try {
+      return await this.db.collection('users').countDocuments();
+    } catch (error) {
+      console.error('Error counting users:', error);
+      return 0;
+    }
   }
 
   async nbFiles() {
-    return this.db.collection('files').countDocuments();
+    try {
+      return await this.db.collection('files').countDocuments();
+    } catch (error) {
+      console.error('Error counting files:', error);
+      return 0;
+    }
   }
 }
 
 const dbClient = new DBClient();
 export default dbClient;
+export { ObjectId };

@@ -26,6 +26,7 @@ class UsersController {
 
       return res.status(201).json({ id: result.insertedId, email });
     } catch (error) {
+      console.error('Error creating user:', error);
       return res.status(500).json({ error: 'Cannot create user' });
     }
   }
@@ -37,17 +38,29 @@ class UsersController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const userId = await redisClient.get(`auth_${token}`);
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    try {
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-    const user = await dbClient.db.collection('users').findOne({ _id: dbClient.ObjectID(userId) });
-    if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+      let user;
+      try {
+        user = await dbClient.db.collection('users').findOne({ _id: dbClient.ObjectID(userId) });
+      } catch (err) {
+        console.error('Invalid ObjectID:', err);
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
 
-    return res.status(200).json({ id: user._id, email: user.email });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      return res.status(200).json({ id: user._id, email: user.email });
+    } catch (error) {
+      console.error('Error retrieving user:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 }
 
