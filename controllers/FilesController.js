@@ -5,6 +5,9 @@ import { ObjectId } from 'mongodb';
 import mime from 'mime-types';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+import Queue from 'bull';
+
+const fileQueue = new Queue('fileQueue');
 
 class FilesController {
   static async postUpload(req, res) {
@@ -89,6 +92,14 @@ class FilesController {
       fileDocument.localPath = localPath;
 
       const result = await dbClient.db.collection('files').insertOne(fileDocument);
+
+      if (type === 'image') {
+        await fileQueue.add({
+          userId,
+          fileId: result.insertedId.toString(),
+        });
+      }
+
       return res.status(201).json({
         id: result.insertedId.toString(),
         userId,
@@ -300,8 +311,20 @@ class FilesController {
       return res.status(400).json({ error: "A folder doesn't have content" });
     }
 
+    let path;
+    const size = req.query.size;
+
+    if (size) {
+      if (!['500', '250', '100'].includes(size)) {
+        return res.status(400).json({ error: 'Invalid size parameter' });
+      }
+      path = `${file.localPath}_${size}`;
+    } else {
+      path = file.localPath;
+    }
+
     try {
-      const fileContent = await fs.readFile(file.localPath);
+      const fileContent = await fs.readFile(path);
       const mimeType = mime.contentType(file.name) || 'application/octet-stream';
       res.setHeader('Content-Type', mimeType);
       return res.status(200).send(fileContent);
