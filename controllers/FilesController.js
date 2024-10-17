@@ -72,31 +72,31 @@ class FilesController {
         parentId,
       });
     } else {
-      const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
-      await fs.mkdir(folderPath, { recursive: true });
+        const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
+        await fs.mkdir(folderPath, { recursive: true });
 
-      const localPath = pathJoin(folderPath, uuidv4());
-      const fileData = Buffer.from(data, 'base64');
+        const localPath = pathJoin(folderPath, uuidv4());
+        const fileData = Buffer.from(data, 'base64');
 
-      try {
-        await fs.writeFile(localPath, fileData);
-      } catch (error) {
-        return res.status(500).json({ error: 'Error saving file' });
+        try {
+          await fs.writeFile(localPath, fileData);
+        } catch (error) {
+          return res.status(500).json({ error: 'Error saving file' });
+        }
+
+        fileDocument.localPath = localPath;
+
+        const result = await dbClient.db.collection('files').insertOne(fileDocument);
+        return res.status(201).json({
+          id: result.insertedId.toString(),
+          userId,
+          name,
+          type,
+          isPublic,
+          parentId,
+        });
       }
-
-      fileDocument.localPath = localPath;
-
-      const result = await dbClient.db.collection('files').insertOne(fileDocument);
-      return res.status(201).json({
-        id: result.insertedId.toString(),
-        userId,
-        name,
-        type,
-        isPublic,
-        parentId,
-      });
     }
-  }
 }
 
 export default FilesController;
